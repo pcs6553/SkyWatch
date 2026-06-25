@@ -1,0 +1,544 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+:root {
+  /* Colors */
+  --bg-dark: #f8fafc;
+  --bg-darker: #e2e8f0;
+  --panel-bg: rgba(255, 255, 255, 0.92);
+  --border-cyan: rgba(2, 132, 199, 0.15);
+  --border-glow: rgba(2, 132, 199, 0.3);
+  --cyan: #0284c7;
+  --cyan-muted: rgba(2, 132, 199, 0.3);
+  --amber: #b45309;
+  --amber-muted: rgba(180, 83, 9, 0.2);
+  --green: #15803d;
+  --red: #b91c1c;
+  --purple: #6d28d9;
+  --blue: #1d4ed8;
+  
+  --text-primary: #0f172a;
+  --text-muted: #475569;
+  
+  /* Fonts */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* Effects */
+  --shadow-glow: 0 4px 12px rgba(2, 132, 199, 0.12);
+  --shadow-amber: 0 4px 12px rgba(180, 83, 9, 0.15);
+  --shadow-red: 0 4px 12px rgba(185, 28, 28, 0.18);
+  --glass-blur: blur(14px);
+}
+
+/* Base resets */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--bg-darker);
+  color: var(--text-primary);
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(8, 14, 28, 0.2);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-cyan);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--cyan-muted);
+}
+
+/* Glassmorphism Panels */
+.glass-panel {
+  background: var(--panel-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--border-cyan);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px 0 rgba(15, 23, 42, 0.08);
+}
+
+.glass-card {
+  background: rgba(241, 245, 249, 0.7);
+  border: 1px solid rgba(2, 132, 199, 0.08);
+  border-radius: 8px;
+  padding: 12px;
+  transition: all 0.2s ease-in-out;
+}
+
+.glass-card:hover {
+  background: rgba(241, 245, 249, 0.95);
+  border-color: rgba(2, 132, 199, 0.18);
+}
+
+/* Typography styles */
+.data-font {
+  font-family: var(--font-mono);
+}
+
+/* Mock Phone Frame Wrapper */
+.phone-simulator-container {
+  display: flex;
+  width: 100vw;
+  height: 100vh;
+  background-color: #e2e8f0;
+  overflow: hidden;
+}
+
+.simulator-side-panel {
+  flex: 1;
+  min-width: 320px;
+  max-width: 480px;
+  background-color: #f1f5f9;
+  border-left: 1px solid rgba(15, 23, 42, 0.08);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.phone-view-area {
+  flex: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background-image: radial-gradient(circle at center, #ffffff 0%, #cbd5e1 100%);
+  position: relative;
+}
+
+/* Smartphone Mockup CSS */
+.smartphone-mockup {
+  position: relative;
+  width: 412px;
+  height: 840px;
+  background: #020205;
+  border: 12px solid #1a1e29;
+  border-radius: 56px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8), 
+              0 0 40px rgba(0, 212, 255, 0.05),
+              inset 0 0 10px rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Phone Screen UI overlay */
+.phone-notch {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 160px;
+  height: 32px;
+  background: #1a1e29;
+  border-bottom-left-radius: 20px;
+  border-bottom-right-radius: 20px;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.phone-camera {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #0d0f14;
+  margin-right: 8px;
+}
+
+.phone-speaker {
+  width: 40px;
+  height: 4px;
+  border-radius: 2px;
+  background: #0d0f14;
+}
+
+.phone-status-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 44px;
+  padding: 0 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  z-index: 9998;
+  padding-bottom: 6px;
+  pointer-events: none;
+}
+
+.phone-home-indicator {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 140px;
+  height: 5px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+  z-index: 9999;
+  pointer-events: none;
+}
+
+.phone-screen-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background-color: var(--bg-dark);
+  overflow: hidden;
+  padding-top: 44px; /* Space for status bar */
+  padding-bottom: 24px; /* Space for home indicator */
+}
+
+/* Animations */
+@keyframes radar-pulse {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(2.0);
+    opacity: 0;
+  }
+}
+
+.selection-ring {
+  position: absolute;
+  width: 32px;
+  height: 32px;
+  border: 1.5px solid var(--amber);
+  border-radius: 50%;
+  animation: radar-pulse 1.6s infinite cubic-bezier(0.1, 0.8, 0.3, 1);
+  pointer-events: none;
+  box-shadow: 0 0 8px var(--amber-muted);
+}
+
+/* Leaflet Custom styling */
+.leaflet-container {
+  background-color: var(--bg-darker) !important;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+.leaflet-control-zoom {
+  border: 1px solid var(--border-cyan) !important;
+  background: var(--panel-bg) !important;
+  box-shadow: var(--shadow-glow) !important;
+  border-radius: 8px !important;
+  overflow: hidden;
+  margin-right: 12px !important;
+  margin-top: 60px !important;
+}
+
+.leaflet-control-zoom-in, .leaflet-control-zoom-out {
+  background: transparent !important;
+  color: var(--cyan) !important;
+  border-bottom: 1px solid var(--border-cyan) !important;
+  transition: all 0.2s;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px !important;
+}
+
+.leaflet-control-zoom-in:hover, .leaflet-control-zoom-out:hover {
+  background: rgba(0, 212, 255, 0.1) !important;
+  color: #fff !important;
+}
+
+.leaflet-bar {
+  border: none !important;
+}
+
+.leaflet-vignette {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  box-shadow: inset 0 0 100px rgba(15, 23, 42, 0.08);
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Radar Sweep overlay */
+.radar-sweep {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  background: linear-gradient(135deg, rgba(0, 212, 255, 0.04) 0%, rgba(0, 212, 255, 0) 50%, rgba(0, 212, 255, 0) 100%);
+  z-index: 2;
+  animation: sweep 12s infinite linear;
+  transform-origin: center;
+}
+
+@keyframes sweep {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Custom Marker Styling */
+.aircraft-marker-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  position: relative;
+  pointer-events: auto !important;
+  cursor: pointer !important;
+}
+
+.custom-airport-pin {
+  pointer-events: auto !important;
+  cursor: pointer !important;
+}
+
+/* World airport dots (OurAirports dataset) */
+.world-airport-pin {
+  pointer-events: auto !important;
+  cursor: pointer !important;
+}
+.world-airport-dot {
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.35);
+}
+.airport-cluster {
+  background: transparent;
+}
+.airport-cluster-inner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: rgba(0, 212, 255, 0.85);
+  border: 2px solid #ffffff;
+  color: #04222b;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.3);
+}
+
+.aircraft-icon-svg {
+  transition: transform 0.4s cubic-bezier(0.1, 0.8, 0.2, 1);
+  filter: drop-shadow(0 0 2px rgba(0,0,0,0.6));
+}
+
+.aircraft-icon-svg.selected {
+  filter: drop-shadow(0 0 4px var(--amber));
+}
+
+.aircraft-callsign-label {
+  position: absolute;
+  top: -18px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid var(--border-cyan);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 2px 4px rgba(15, 23, 42, 0.1);
+}
+
+.aircraft-callsign-label.selected {
+  border-color: var(--amber);
+  color: var(--amber);
+  background: rgba(255, 255, 255, 1);
+}
+
+/* Bottom Sheet Swipe Drawer */
+.bottom-sheet-backdrop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(15, 23, 42, 0.3);
+  z-index: 1000;
+  backdrop-filter: blur(3px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.bottom-sheet-backdrop.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.bottom-sheet-drawer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--panel-bg);
+  backdrop-filter: var(--glass-blur);
+  border-top: 1px solid var(--border-cyan);
+  border-top-left-radius: 16px;
+  border-top-right-radius: 16px;
+  box-shadow: 0 -8px 32px rgba(0,0,0,0.7);
+  z-index: 1001;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.3s cubic-bezier(0.1, 0.8, 0.25, 1);
+  transform: translateY(100%);
+  max-height: 85%;
+  height: 85%;
+  overflow: hidden;
+}
+
+.bottom-sheet-drawer.collapsed {
+  transform: translateY(calc(100% - 90px));
+}
+
+.bottom-sheet-drawer.half {
+  transform: translateY(45%);
+}
+
+.bottom-sheet-drawer.full {
+  transform: translateY(0);
+}
+
+.bottom-sheet-drawer.hidden {
+  transform: translateY(100%);
+}
+
+.bottom-sheet-drag-handle {
+  width: 100%;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  background: transparent;
+  flex-shrink: 0;
+}
+
+.bottom-sheet-drag-bar {
+  width: 36px;
+  height: 4px;
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 2px;
+}
+
+.bottom-sheet-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 16px 24px 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Skeleton Screens */
+.skeleton {
+  background: linear-gradient(90deg, rgba(241, 245, 249, 0.8) 25%, rgba(2, 132, 199, 0.08) 37%, rgba(241, 245, 249, 0.8) 63%);
+  background-size: 400% 100%;
+  animation: skeleton-loading 1.4s ease infinite;
+}
+
+/* Leaflet Overrides for Light Mode map tiles display */
+.leaflet-container img.leaflet-tile {
+  mix-blend-mode: normal !important;
+  filter: none !important;
+}
+
+.leaflet-control-zoom-in:hover, .leaflet-control-zoom-out:hover {
+  background: rgba(2, 132, 199, 0.08) !important;
+  color: var(--cyan) !important;
+}
+
+@keyframes skeleton-loading {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* Responsive Mobile Layout Overrides */
+@media (max-width: 900px) {
+  .phone-simulator-container {
+    display: block;
+    width: 100vw;
+    height: 100vh;
+    background-color: var(--bg-darker);
+  }
+
+  .simulator-side-panel {
+    display: none !important; /* Hide developer panel on mobile screens */
+  }
+
+  .phone-view-area {
+    display: block;
+    padding: 0 !important;
+    width: 100%;
+    height: 100%;
+    background: none !important;
+  }
+
+  .smartphone-mockup {
+    width: 100% !important;
+    height: 100% !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .phone-notch,
+  .phone-status-bar,
+  .phone-home-indicator {
+    display: none !important; /* Hide simulated phone elements since real phone has them */
+  }
+
+  .phone-screen-content {
+    height: 100% !important;
+    padding-top: max(env(safe-area-inset-top, 0px), 36px) !important;
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 16px) !important;
+  }
+}
+
