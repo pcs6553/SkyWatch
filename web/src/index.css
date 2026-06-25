@@ -500,6 +500,38 @@ body {
   }
 }
 
+/* Flight Path Animation */
+.flight-path-line {
+  pointer-events: none;
+  z-index: 400 !important;
+}
+
+.flight-path-animated {
+  pointer-events: none;
+  z-index: 401 !important;
+  animation: dash-flow 3s linear infinite;
+}
+
+@keyframes dash-flow {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: 25;
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+}
+
 /* Responsive Mobile Layout Overrides */
 @media (max-width: 900px) {
   .phone-simulator-container {

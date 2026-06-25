@@ -35,6 +35,7 @@ export default function BottomSheet({
 }) {
   const [activeTab, setActiveTab] = useState('flight-info'); // flight-info, aircraft-info, arrivals, departures, weather, delays
   const [aircraftPhoto, setAircraftPhoto] = useState(null); // { src, link, photographer } | null
+  const [dragState, setDragState] = useState({ isDragging: false, startY: 0, startHeight: sheetHeight });
 
   // Reset tabs when the *selection itself* changes — not on every data
   // refresh. Live flights get a brand new object reference every ~30s poll
@@ -65,7 +66,7 @@ export default function BottomSheet({
 
   if (!selectedFlight && !selectedAirport) return null;
 
-  // Handle drag handle cycle clicks
+  // Handle drag handle cycle clicks (fallback for simple click)
   const cycleHeight = () => {
     if (sheetHeight === 'collapsed') {
       setSheetHeight('half');
@@ -74,6 +75,35 @@ export default function BottomSheet({
     } else {
       setSheetHeight('collapsed');
     }
+  };
+
+  // Touch/Mouse drag handlers for smooth sheet resizing
+  const handleDragStart = (e) => {
+    const clientY = e.type === 'touchstart' ? e.touches[0].clientY : e.clientY;
+    setDragState({ isDragging: true, startY: clientY, startHeight: sheetHeight });
+    e.preventDefault();
+  };
+
+  const handleDragMove = (e) => {
+    if (!dragState.isDragging) return;
+    
+    const clientY = e.type === 'touchmove' ? e.touches[0].clientY : e.clientY;
+    const deltaY = dragState.startY - clientY;
+    
+    // Drag up (deltaY > 0) = expand, drag down = collapse
+    if (deltaY > 80) {
+      // Dragged up significantly
+      if (dragState.startHeight === 'collapsed') setSheetHeight('half');
+      else if (dragState.startHeight === 'half') setSheetHeight('full');
+    } else if (deltaY < -80) {
+      // Dragged down significantly
+      if (dragState.startHeight === 'full') setSheetHeight('half');
+      else if (dragState.startHeight === 'half') setSheetHeight('collapsed');
+    }
+  };
+
+  const handleDragEnd = () => {
+    setDragState({ isDragging: false, startY: 0, startHeight: sheetHeight });
   };
 
   const isBookmarked = selectedFlight 
@@ -98,8 +128,19 @@ export default function BottomSheet({
   return (
     <div className={`bottom-sheet-drawer ${sheetHeight}`}>
       
-      {/* Drag Handle */}
-      <div className="bottom-sheet-drag-handle" onClick={cycleHeight}>
+      {/* Drag Handle - now supports both tap and drag gestures */}
+      <div 
+        className="bottom-sheet-drag-handle" 
+        onClick={cycleHeight}
+        onMouseDown={handleDragStart}
+        onMouseMove={handleDragMove}
+        onMouseUp={handleDragEnd}
+        onMouseLeave={handleDragEnd}
+        onTouchStart={handleDragStart}
+        onTouchMove={handleDragMove}
+        onTouchEnd={handleDragEnd}
+        style={{ cursor: dragState.isDragging ? 'grabbing' : 'grab' }}
+      >
         <div className="bottom-sheet-drag-bar" />
       </div>
 

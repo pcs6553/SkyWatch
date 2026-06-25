@@ -646,21 +646,44 @@ const MapView = forwardRef(function MapView({
     if (selectedFlight) {
       map.panTo([selectedFlight.lat, selectedFlight.lng]);
       
-      // Draw Planned Airway (Route Ghost)
+      // Draw flight path (historical trail + current position as a connected path)
       if (plannedAirwayRef.current) {
         map.removeLayer(plannedAirwayRef.current);
       }
 
-      if (selectedFlight.plannedAirway) {
-        plannedAirwayRef.current = L.polyline(selectedFlight.plannedAirway.map(pt => [pt.lat, pt.lng]), {
-          color: '#0284c7', // Cyan/sky blue color line for visibility
-          weight: 3.0,       // Thicker route line for light mode
-          opacity: 0.8,      // Higher opacity
-          dashArray: '5,5'   // Clearer dash
+      // Build complete flight path from trail data
+      if (selectedFlight.trail && selectedFlight.trail.length > 0) {
+        // Combine trail with current position to show the full path traveled
+        const flightPath = [
+          ...selectedFlight.trail.map(t => [t.lat, t.lng]),
+          [selectedFlight.lat, selectedFlight.lng]
+        ];
+
+        plannedAirwayRef.current = L.polyline(flightPath, {
+          color: '#ffb347',     // Amber/orange for traveled path
+          weight: 3.0,
+          opacity: 0.7,
+          dashArray: 'none',    // Solid line for actual path taken
+          className: 'flight-path-line'
         }).addTo(map);
+
+        // Add animated dashes overlay to show direction of travel
+        const animatedOverlay = L.polyline(flightPath, {
+          color: '#ff9e00',
+          weight: 2.0,
+          opacity: 0.9,
+          dashArray: '10,15',
+          className: 'flight-path-animated'
+        }).addTo(map);
+
+        // Store both lines for cleanup
+        plannedAirwayRef.current.animatedLayer = animatedOverlay;
       }
     } else {
       if (plannedAirwayRef.current) {
+        if (plannedAirwayRef.current.animatedLayer) {
+          map.removeLayer(plannedAirwayRef.current.animatedLayer);
+        }
         map.removeLayer(plannedAirwayRef.current);
         plannedAirwayRef.current = null;
       }
