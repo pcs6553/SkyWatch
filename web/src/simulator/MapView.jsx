@@ -14,6 +14,13 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
+// The ~112 rich "hub" airport pins only render once zoomed in this far. Tile
+// layers cap at maxZoom 20, so "60%" zoomed in ≈ z12 — below that they add
+// visual clutter for no real benefit at a world/country view. (The separate
+// ~72k-marker world-airport layer handles its own zoom-based density via
+// clustering instead of this constant — see the comment where it's built.)
+const AIRPORT_MIN_ZOOM = 12;
+
 // SVG airplane silhouette string
 const getPlaneSVG = (color, isSelected) => {
   const scale = isSelected ? 1.3 : 1.0;
@@ -179,19 +186,16 @@ const MapView = forwardRef(function MapView({
     // maxNativeZoom = the provider's real tile resolution; maxZoom kept higher
     // so Leaflet overzooms (upscales) past it instead of rendering a blank
     // "no data" tile once you zoom in further than the source actually covers.
-    if (mapStyle === 'flightradar') {
-      const base = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}', {
-        maxNativeZoom: 13,
-        maxZoom: 20,
-        attribution: 'Esri, GEBCO, NOAA'
-      });
-      const labels = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Reference/MapServer/tile/{z}/{y}/{x}', {
-        maxNativeZoom: 13,
-        maxZoom: 20
-      });
-      const group = L.layerGroup([base, labels]).addTo(map);
-      tileLayerRef.current = group;
-    } else {
+    // 'flightradar' used to be a dedicated Esri basemap (first "Ocean
+    // Base/Reference" — bathymetry-only, native max z13 — then
+    // "World_Street_Map", which turned out to have only sparse street
+    // coverage outside the US/EU: past its actual coverage it serves a valid
+    // HTTP 200 "Map data not yet available" placeholder *image*, so it never
+    // shows up as a tile-load error, it just silently has no useful content).
+    // CartoDB's light_all (OSM-based) has real, consistent global coverage at
+    // city zoom, so 'flightradar' now shares that same basemap as the
+    // default style below instead of a dedicated source.
+    {
       let newUrl = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
       let options = { maxNativeZoom: 19, maxZoom: 20 };
 
@@ -217,6 +221,9 @@ const MapView = forwardRef(function MapView({
     // Remove existing airports
     Object.values(airportsRef.current).forEach(m => map.removeLayer(m));
     airportsRef.current = {};
+
+    // Hide all airport pins when zoomed out — see AIRPORT_MIN_ZOOM.
+    if (zoom < AIRPORT_MIN_ZOOM) return;
 
     // Render airports
     Object.values(AIRPORTS).forEach(a => {
@@ -269,29 +276,32 @@ const MapView = forwardRef(function MapView({
     });
   }, [selectedAirport, zoom]);
 
-  // Render ALL world airports (OurAirports dataset, ~72k) via marker clustering.
-  // Runs once after the map exists. The ~112 rich hub airports above render on
-  // top of these with full stats; here we skip any IATA already covered by a hub.
+  // Render ALL world airports (OurAirports dataset, ~72k) via marker
+  // clustering. Runs once after the map exists. The ~112 rich hub airports
+  // above render on top of these with full stats; here we skip any IATA
+  // already covered by a hub.
+  //
+  // No zoom-based attach/detach here — see the comment on the cluster options
+  // below for why, and how plain clustering already keeps this cheap at low
+  // zoom without it.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || worldAirportsClusterRef.current) return;
 
     let cancelled = false;
 
-    const TYPE_STYLE = {
-      large_airport:  { size: 9,  color: '#00d4ff', z: 5 },
-      medium_airport: { size: 7,  color: '#39b6c9', z: 4 },
-      small_airport:  { size: 5,  color: '#6b9aa6', z: 3 },
-      seaplane_base:  { size: 5,  color: '#4a90b8', z: 2 },
-      heliport:       { size: 4,  color: '#8a8f99', z: 1 },
-      balloonport:    { size: 4,  color: '#8a8f99', z: 1 },
-    };
-
     const cluster = L.markerClusterGroup({
       chunkedLoading: true,
       removeOutsideVisibleBounds: true,
       maxClusterRadius: 55,
-      disableClusteringAtZoom: 9,
+      // No disableClusteringAtZoom needed: plain clustering already gives the
+      // "hide at low zoom, show individually at high zoom" outcome on its
+      // own. An airport with no neighbor within maxClusterRadius (55px)
+      // renders using its own icon, not a cluster bubble — at high zoom, 55px
+      // covers a tiny ground distance, so most airports end up "alone" and
+      // show individually. At low zoom, the same 55px covers a huge area, so
+      // everything collapses into a handful of cluster bubbles, which is what
+      // keeps it cheap when zoomed out.
       spiderfyOnMaxZoom: false,
       iconCreateFunction: (c) => {
         const n = c.getChildCount();
@@ -303,6 +313,15 @@ const MapView = forwardRef(function MapView({
         });
       },
     });
+
+    const TYPE_STYLE = {
+      large_airport:  { size: 9,  color: '#00d4ff', z: 5 },
+      medium_airport: { size: 7,  color: '#39b6c9', z: 4 },
+      small_airport:  { size: 5,  color: '#6b9aa6', z: 3 },
+      seaplane_base:  { size: 5,  color: '#4a90b8', z: 2 },
+      heliport:       { size: 4,  color: '#8a8f99', z: 1 },
+      balloonport:    { size: 4,  color: '#8a8f99', z: 1 },
+    };
 
     const buildAirport = (a) => ({
       iata: a.iata || a.icao,
@@ -334,7 +353,7 @@ const MapView = forwardRef(function MapView({
 
     loadAirports()
       .then((data) => {
-        if (cancelled || !mapRef.current) return;
+        if (cancelled) return;
 
         // IATA codes already shown as rich hub pins — don't duplicate them.
         const hubIatas = new Set(Object.keys(AIRPORTS));

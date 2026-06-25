@@ -9,14 +9,14 @@ import android.webkit.WebViewClient
 import java.io.ByteArrayInputStream
 import java.net.HttpURLConnection
 import java.net.URL
-import java.util.concurrent.TimeUnit
 
 /**
- * WebViewClient that intercepts /api/opensky requests and proxies them to
- * https://opensky-network.org/api/states/all with Basic Auth injected.
+ * WebViewClient that intercepts two API paths the bundled web app calls and
+ * proxies them natively (the Android equivalent of the Vite dev proxy /
+ * Vercel serverless functions, so the same client JS works unmodified):
  *
- * This is the native Android equivalent of the Vite dev proxy — it means
- * the exact same client JS code works in the WebView without modification.
+ *  - /api/opensky        → FlightRadar24's live feed (spoofed browser headers)
+ *  - /api/aircraft-photo → Planespotters' public photo API (descriptive UA)
  */
 class OpenSkyWebViewClient : WebViewClient() {
 
@@ -33,6 +33,8 @@ class OpenSkyWebViewClient : WebViewClient() {
         }
 
         private const val OPENSKY_BASE = "https://data-cloud.flightradar24.com/zones/fcgi/feed.js"
+        private const val PLANESPOTTERS_BASE = "https://api.planespotters.net/pub/photos/hex"
+        private const val PLANESPOTTERS_UA = "SkyWatch/1.0 (+https://github.com/pcs6553/SkyWatch)"
 
         // Timeout: OpenSky can take up to 20 s to respond
         private const val CONNECT_TIMEOUT_MS = 10_000
@@ -45,11 +47,17 @@ class OpenSkyWebViewClient : WebViewClient() {
     ): WebResourceResponse? {
         val url = request.url.toString()
 
-        // Only intercept our proxy path
-        if (!url.contains("/api/opensky")) {
-            return super.shouldInterceptRequest(view, request)
+        if (url.contains("/api/aircraft-photo")) {
+            return proxyAircraftPhoto(request)
         }
+        if (url.contains("/api/opensky")) {
+            return proxyOpenSky(request)
+        }
+        return super.shouldInterceptRequest(view, request)
+    }
 
+    private fun proxyOpenSky(request: WebResourceRequest): WebResourceResponse {
+        val url = request.url.toString()
         Log.d(TAG, "Intercepting: $url")
 
         return try {
@@ -110,6 +118,63 @@ class OpenSkyWebViewClient : WebViewClient() {
         } catch (e: Exception) {
             Log.e(TAG, "Proxy error: ${e.message}", e)
             // Return a 502 so the JS error handler can see it
+            WebResourceResponse(
+                "application/json",
+                "utf-8",
+                502,
+                "Bad Gateway",
+                mapOf("Access-Control-Allow-Origin" to "*"),
+                ByteArrayInputStream("""{"error":"${e.message}"}""".toByteArray())
+            )
+        }
+    }
+
+    // Planespotters rejects requests without a descriptive User-Agent
+    // (browsers can't set that header from fetch()/XHR, so it's proxied here
+    // the same way the Vite dev proxy / Vercel function do).
+    private fun proxyAircraftPhoto(request: WebResourceRequest): WebResourceResponse {
+        val url = request.url.toString()
+        Log.d(TAG, "Intercepting: $url")
+
+        return try {
+            val hex = request.url.getQueryParameter("hex") ?: ""
+            val upstreamUrl = "$PLANESPOTTERS_BASE/${java.net.URLEncoder.encode(hex, "UTF-8")}"
+
+            Log.d(TAG, "Forwarding to: $upstreamUrl")
+
+            val connection = (URL(upstreamUrl).openConnection() as HttpURLConnection).apply {
+                requestMethod  = "GET"
+                connectTimeout = CONNECT_TIMEOUT_MS
+                readTimeout    = READ_TIMEOUT_MS
+                setRequestProperty("Accept", "application/json")
+                setRequestProperty("User-Agent", PLANESPOTTERS_UA)
+                instanceFollowRedirects = true
+            }
+
+            connection.connect()
+            val statusCode = connection.responseCode
+            Log.d(TAG, "Planespotters response: HTTP $statusCode")
+
+            val body = if (statusCode == HttpURLConnection.HTTP_OK) {
+                connection.inputStream.readBytes()
+            } else {
+                (connection.errorStream ?: connection.inputStream).readBytes()
+            }
+
+            WebResourceResponse(
+                "application/json",
+                "utf-8",
+                statusCode,
+                if (statusCode == HttpURLConnection.HTTP_OK) "OK" else "Error",
+                mapOf(
+                    "Access-Control-Allow-Origin" to "*",
+                    "Cache-Control"              to "max-age=86400",
+                    "Content-Type"               to "application/json; charset=utf-8"
+                ),
+                ByteArrayInputStream(body)
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Photo proxy error: ${e.message}", e)
             WebResourceResponse(
                 "application/json",
                 "utf-8",

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Plane, Star, Bell, Compass, Share2, Landmark, Clock, ArrowRight, Wind, ShieldAlert, Thermometer, User, CompassIcon } from 'lucide-react';
-import { getMETAR, AIRPORTS } from '../mock/flightData';
+import { Plane, Star, Bell, Compass, Share2, Landmark, Clock, ArrowRight, Wind, ShieldAlert, Thermometer, User, CompassIcon, Camera } from 'lucide-react';
+import { getMETAR, AIRPORTS, fetchAircraftPhoto } from '../mock/flightData';
 
 // Translation helper to access window.__FR24_SSR_LAZY_TRANSLATIONS__
 const t = (path, fallback) => {
@@ -34,15 +34,34 @@ export default function BottomSheet({
   tier
 }) {
   const [activeTab, setActiveTab] = useState('flight-info'); // flight-info, aircraft-info, arrivals, departures, weather, delays
-  
-  // Reset tabs on selection changes
+  const [aircraftPhoto, setAircraftPhoto] = useState(null); // { src, link, photographer } | null
+
+  // Reset tabs when the *selection itself* changes — not on every data
+  // refresh. Live flights get a brand new object reference every ~30s poll
+  // (App.jsx re-syncs selectedFlight from the freshly fetched array), even
+  // when it's the same aircraft. Depending on the whole object here meant
+  // this effect re-fired on every refresh and silently snapped the user back
+  // to the Flight Info tab if they'd switched to Aircraft Specs.
   useEffect(() => {
     if (selectedFlight) {
       setActiveTab('flight-info');
     } else if (selectedAirport) {
       setActiveTab('arrivals');
     }
-  }, [selectedFlight, selectedAirport]);
+  }, [selectedFlight?.id, selectedAirport?.iata]);
+
+  // Look up a real photo of the selected aircraft by its ICAO24 hex address.
+  // Mock/simulated flights don't have a real icao24, so this only resolves
+  // for live (FlightRadar24-sourced) flights.
+  useEffect(() => {
+    setAircraftPhoto(null);
+    if (!selectedFlight?.icao24) return;
+    let cancelled = false;
+    fetchAircraftPhoto(selectedFlight.icao24).then((photo) => {
+      if (!cancelled) setAircraftPhoto(photo);
+    });
+    return () => { cancelled = true; };
+  }, [selectedFlight?.icao24]);
 
   if (!selectedFlight && !selectedAirport) return null;
 
@@ -129,6 +148,36 @@ export default function BottomSheet({
                 <span>{selectedFlight.type}</span>
               </div>
             </div>
+
+            {/* Real aircraft photo (Planespotters), when available — only
+                worth the space once the sheet is opened up */}
+            {sheetHeight !== 'collapsed' && aircraftPhoto && (
+              <div style={{ marginBottom: '16px', borderRadius: '10px', overflow: 'hidden', position: 'relative', background: '#0c1620', height: '160px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <img
+                  src={aircraftPhoto.src}
+                  alt={`${selectedFlight.registration || selectedFlight.callsign} (${selectedFlight.type})`}
+                  // contain (not cover) so the whole aircraft is visible —
+                  // cover was cropping wingtips/nose depending on the source
+                  // photo's aspect ratio. The dark backdrop above fills any
+                  // letterboxing instead of leaving a hard white edge.
+                  style={{ width: '100%', height: '100%', display: 'block', objectFit: 'contain' }}
+                  onError={() => setAircraftPhoto(null)}
+                />
+                <a
+                  href={aircraftPhoto.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    position: 'absolute', right: '6px', bottom: '6px',
+                    fontSize: '9px', color: '#fff', background: 'rgba(0,0,0,0.55)',
+                    padding: '2px 6px', borderRadius: '4px', textDecoration: 'none',
+                    display: 'flex', alignItems: 'center', gap: '4px'
+                  }}
+                >
+                  <Camera size={10} /> {aircraftPhoto.photographer || 'Planespotters'}
+                </a>
+              </div>
+            )}
 
             {/* Route Progress section (only visible in half/full views) */}
             {sheetHeight !== 'collapsed' && (
@@ -279,11 +328,30 @@ export default function BottomSheet({
             {activeTab === 'aircraft-info' && sheetHeight === 'full' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flex: 1 }}>
                 
-                {/* Aircraft image mock */}
-                <div style={{ position: 'relative', width: '100%', height: '140px', background: 'linear-gradient(rgba(0,0,0,0.1), rgba(0,0,0,0.6)), url("https://images.unsplash.com/photo-1540962351504-03099e0a754b?w=400&q=80")', backgroundSize: 'cover', backgroundPosition: 'center', borderRadius: '8px', overflow: 'hidden' }}>
-                  <div style={{ position: 'absolute', bottom: '8px', left: '8px', fontSize: '11px', color: '#fff', background: 'rgba(0,0,0,0.5)', padding: '2px 6px', borderRadius: '4px' }}>
-                    Photo via JetPhotos
-                  </div>
+                {/* Real aircraft photo (same Planespotters lookup as the
+                    header) — contain-fit on a dark backdrop, not cover, so
+                    the whole airframe is visible regardless of the source
+                    photo's aspect ratio. */}
+                <div style={{ position: 'relative', width: '100%', height: '140px', background: '#0c1620', borderRadius: '8px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {aircraftPhoto ? (
+                    <>
+                      <img
+                        src={aircraftPhoto.src}
+                        alt={`${selectedFlight.registration || selectedFlight.callsign} (${selectedFlight.type})`}
+                        style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                      />
+                      <a
+                        href={aircraftPhoto.link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ position: 'absolute', bottom: '8px', left: '8px', fontSize: '11px', color: '#fff', background: 'rgba(0,0,0,0.5)', padding: '2px 6px', borderRadius: '4px', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}
+                      >
+                        <Camera size={11} /> {aircraftPhoto.photographer || 'Planespotters'}
+                      </a>
+                    </>
+                  ) : (
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>No photo available for this aircraft</span>
+                  )}
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>

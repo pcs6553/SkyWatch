@@ -560,6 +560,37 @@ function parseStateVector(state, index, hubCode) {
  *   Pass null for a truly global query (returns ~5 000-9 000 aircraft worldwide).
  * @returns {Promise<Array>} Parsed live flight objects ready for the map.
  */
+
+// ICAO type designators for rotorcraft (FR24 supplies the real type code per
+// aircraft — this replaces a speed/altitude heuristic that tagged almost any
+// slow, low-altitude aircraft as a Helicopter, which in practice meant nearly
+// every aircraft taxiing or parked at an airport, regardless of actual type).
+const HELICOPTER_TYPE_CODES = new Set([
+  'EC20', 'EC25', 'EC30', 'EC35', 'EC45', 'EC55', 'EC65', 'EC75', 'EC30',
+  'AS50', 'AS55', 'AS65', 'AS32', 'AS92', 'AS35',
+  'A109', 'A119', 'A129', 'A139', 'A169', 'A189', 'A609',
+  'B06', 'B47', 'B105', 'B212', 'B222', 'B230', 'B407', 'B412', 'B429', 'B430',
+  'H1', 'H25', 'H47', 'H53', 'H58', 'H60', 'H64', 'H125', 'H130', 'H145', 'H155', 'H160', 'H175',
+  'R22', 'R44', 'R66', 'S76', 'S92', 'S61', 'S70',
+  'W3SO', 'GAZL', 'LAMA', 'ALO2', 'ALO3', 'NH90', 'CH47', 'MD52', 'MD60', 'MD90H',
+  'EH10', 'AW09', 'AW119', 'AW129', 'AW139', 'AW169', 'AW189', 'AW609',
+]);
+
+// Cargo-only ICAO callsign/airline prefixes — same source data otherwise
+// looks identical to a passenger flight (FR24 doesn't flag cargo directly).
+const CARGO_AIRLINE_PREFIXES = new Set([
+  'FDX', 'UPS', 'GEC', 'CLX', 'GTI', 'CKS', 'ABX', 'ATN', 'CAO', 'CES', 'BOX', 'QAR',
+]);
+
+function classifyFlightCategory({ typeCode, prefix, flightNumber }) {
+  if (typeCode && HELICOPTER_TYPE_CODES.has(typeCode.toUpperCase())) return 'Helicopter';
+  if (['MIL', 'IAM', 'USAF', 'RFR', 'NAVY', 'NVY'].includes(prefix)) return 'Military';
+  if (CARGO_AIRLINE_PREFIXES.has(prefix)) return 'Cargo';
+  // No commercial flight number assigned almost always means private/biz aviation.
+  if (!flightNumber) return 'Private';
+  return 'Commercial';
+}
+
 export async function fetchLiveOpenSkyFlights(hubCode = 'LHR', bbox = null) {
   const defaultBboxes = {
     LHR: { lamin: 45.0, lomin: -12.0, lamax: 62.0, lomax: 20.0 },  // Western Europe
@@ -634,10 +665,7 @@ export async function fetchLiveOpenSkyFlights(hubCode = 'LHR', bbox = null) {
         const altFt = alt || 0;
         const speedKt = speed || 0;
 
-        let category = 'Commercial';
-        if (speedKt < 150 && altFt < 4000) category = 'Helicopter';
-        else if (['MIL','IAM','USAF','RFR'].includes(prefix)) category = 'Military';
-        else if (speedKt < 250 && altFt < 15000) category = 'Private';
+        const category = classifyFlightCategory({ typeCode: type, prefix, flightNumber: flight });
 
         // Trailpoints (estimated back-track from current position & heading)
         const trail = [];
@@ -704,5 +732,46 @@ export async function fetchLiveOpenSkyFlights(hubCode = 'LHR', bbox = null) {
       console.error('[SkyWatch] Live flights fetch error:', err.message || err);
     }
     return [];
+  }
+}
+
+// In-memory cache so re-selecting the same aircraft (or it reappearing after
+// a refetch) doesn't re-hit the photo API every time.
+const aircraftPhotoCache = new Map(); // icao24 -> { src, link, photographer } | null
+
+/**
+ * Look up a real photo of a specific aircraft by its ICAO24 hex address via
+ * Planespotters' public photo API (proxied — see /api/aircraft-photo in
+ * vite.config.js, api/aircraft-photo.js, and the Android WebViewClient).
+ * Returns null if no photo is available (e.g. mock/simulated flights with no
+ * real icao24, or an aircraft Planespotters has no photo of).
+ */
+export async function fetchAircraftPhoto(icao24) {
+  if (!icao24) return null;
+  const hex = icao24.toLowerCase();
+  if (aircraftPhotoCache.has(hex)) return aircraftPhotoCache.get(hex);
+
+  try {
+    const apiBase = typeof window !== 'undefined' && window.location.protocol === 'file:' ? 'https://localhost' : '';
+    const res = await fetch(`${apiBase}/api/aircraft-photo?hex=${encodeURIComponent(hex)}`);
+    if (!res.ok) {
+      aircraftPhotoCache.set(hex, null);
+      return null;
+    }
+    const data = await res.json();
+    const photo = data?.photos?.[0];
+    const result = photo
+      ? {
+          src: photo.thumbnail_large?.src || photo.thumbnail?.src,
+          link: photo.link,
+          photographer: photo.photographer,
+        }
+      : null;
+    aircraftPhotoCache.set(hex, result);
+    return result;
+  } catch (err) {
+    console.warn('[SkyWatch] Aircraft photo fetch failed:', err.message || err);
+    aircraftPhotoCache.set(hex, null);
+    return null;
   }
 }

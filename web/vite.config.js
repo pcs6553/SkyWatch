@@ -31,6 +31,25 @@ export default defineConfig({
           return '/zones/fcgi/feed.js' + query;
         },
       },
+      // GET /api/aircraft-photo?hex=ICAO24  →  Planespotters' public photo API.
+      // Browsers can't send a custom User-Agent from fetch()/XHR (it's a
+      // forbidden header), and Planespotters rejects generic/default UAs —
+      // so this has to be proxied server-side, same as /api/opensky above.
+      // Matches the same path used by api/aircraft-photo.js (Vercel) and the
+      // Android WebViewClient, so the same URL works in all three.
+      '/api/aircraft-photo': {
+        target: 'https://api.planespotters.net',
+        changeOrigin: true,
+        secure: true,
+        headers: {
+          'User-Agent': 'SkyWatch/1.0 (+https://github.com/pcs6553/SkyWatch)',
+        },
+        rewrite: (path) => {
+          const url = new URL(path, 'http://x');
+          const hex = url.searchParams.get('hex') || '';
+          return '/pub/photos/hex/' + encodeURIComponent(hex);
+        },
+      },
     },
   },
 })
