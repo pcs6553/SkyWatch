@@ -50,6 +50,9 @@ export default function App() {
   const [locating, setLocating]             = useState(false);
   const [locationError, setLocationError]   = useState(null);
   const mapViewRef                          = useRef(null);      // used to call panTo from outside
+  const [mapBounds, setMapBounds]           = useState(null);    // current viewport bbox, follows pan/zoom
+  const mapBoundsRef                        = useRef(null);
+  const fetchLiveRef                        = useRef(null);       // latest fetchLive(), set by the fetch-loop effect below
 
   // App Settings
   const [tier, setTier] = useState('Free'); // Free, Silver, Gold
@@ -105,8 +108,12 @@ export default function App() {
     const fetchLive = async () => {
       setLoadingLive(true);
       try {
-        let bbox = null;
-        if (userRealCoords) {
+        // Prefer whatever the map is currently showing (kept up to date via
+        // onBoundsChange from MapView) — falls back to a GPS-centered box,
+        // then the per-hub default, so flights still load before the map
+        // reports its first viewport.
+        let bbox = mapBoundsRef.current;
+        if (!bbox && userRealCoords) {
           // Bounding box centered on user's real GPS coordinates (+/- 6 deg lat, +/- 10 deg lng)
           bbox = {
             lamin: userRealCoords.lat - 6.0,
@@ -131,6 +138,7 @@ export default function App() {
         setLoadingLive(false);
       }
     };
+    fetchLiveRef.current = fetchLive;
 
     fetchLive();
     const interval = setInterval(fetchLive, 30000); // refresh every 30s
@@ -138,6 +146,17 @@ export default function App() {
     return () => clearInterval(interval);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataSourceMode, userLocation, userRealCoords]);
+
+  // Keep mapBoundsRef in sync (read by fetchLive above) and immediately
+  // refetch for the new viewport when the user pans/zooms — otherwise flights
+  // stay anchored to wherever the box was first centered until the next 30s
+  // interval tick.
+  useEffect(() => {
+    mapBoundsRef.current = mapBounds;
+    if (mapBounds && dataSourceMode === 'opensky' && fetchLiveRef.current) {
+      fetchLiveRef.current();
+    }
+  }, [mapBounds, dataSourceMode]);
 
   // Handle Squawk Triggers and Trigger Banner Toasts
   useEffect(() => {
@@ -465,6 +484,7 @@ export default function App() {
                     heatmapActive={heatmapActive}
                     tier={tier}
                     userRealCoords={userRealCoords}
+                    onBoundsChange={setMapBounds}
                   />
 
                   {/* iOS Style Bottom Sheet Drawer */}

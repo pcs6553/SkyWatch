@@ -34,6 +34,7 @@ const MapView = forwardRef(function MapView({
   heatmapActive,
   tier,
   userRealCoords,   // { lat, lng } | null — the user's real GPS position
+  onBoundsChange,   // (bbox: {lamin,lomin,lamax,lomax}) => void — current viewport
 }, ref) {
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
@@ -58,7 +59,9 @@ const MapView = forwardRef(function MapView({
   
   const onSelectFlightRef = useRef(onSelectFlight);
   const onSelectAirportRef = useRef(onSelectAirport);
+  const onBoundsChangeRef = useRef(onBoundsChange);
   const flightsRef = useRef(flights);
+  const boundsDebounceRef = useRef(null);
 
   useEffect(() => {
     onSelectFlightRef.current = onSelectFlight;
@@ -71,6 +74,10 @@ const MapView = forwardRef(function MapView({
   useEffect(() => {
     flightsRef.current = flights;
   }, [flights]);
+
+  useEffect(() => {
+    onBoundsChangeRef.current = onBoundsChange;
+  }, [onBoundsChange]);
 
   // Expose imperative panTo so parent (App.jsx) can pan after GPS resolves
   useImperativeHandle(ref, () => ({
@@ -89,7 +96,10 @@ const MapView = forwardRef(function MapView({
     const map = L.map(mapContainerRef.current, {
       center: [35, -20],
       zoom: 3,
-      zoomControl: true,
+      // zoomControl disabled here — we add a single explicit control below.
+      // Leaving this true as well as calling L.control.zoom() was rendering
+      // two sets of +/- buttons (one default top-left, one custom top-right).
+      zoomControl: false,
       attributionControl: false
     });
 
@@ -99,7 +109,11 @@ const MapView = forwardRef(function MapView({
     L.control.zoom({ position: 'topright' }).addTo(map);
 
     // Initial tile layer (Positron Light)
+    // maxNativeZoom caps real tile requests at the provider's actual resolution;
+    // maxZoom lets Leaflet keep zooming past that by upscaling the last tile
+    // instead of showing a blank/grey "no data" tile.
     const tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+      maxNativeZoom: 19,
       maxZoom: 20
     }).addTo(map);
     tileLayerRef.current = tiles;
@@ -122,7 +136,28 @@ const MapView = forwardRef(function MapView({
       setZoom(map.getZoom());
     });
 
+    // Live flight data is fetched for a bounding box — without this, panning
+    // away from wherever that box was centered (e.g. the GPS "locate me"
+    // point) shows an empty map, since no flights were ever fetched for the
+    // area now in view. Debounced so we don't fire on every drag frame.
+    const emitBounds = () => {
+      if (!onBoundsChangeRef.current) return;
+      const b = map.getBounds();
+      onBoundsChangeRef.current({
+        lamin: b.getSouth(),
+        lomin: b.getWest(),
+        lamax: b.getNorth(),
+        lomax: b.getEast(),
+      });
+    };
+    map.on('moveend', () => {
+      clearTimeout(boundsDebounceRef.current);
+      boundsDebounceRef.current = setTimeout(emitBounds, 600);
+    });
+    emitBounds(); // report the initial viewport immediately
+
     return () => {
+      clearTimeout(boundsDebounceRef.current);
       // Cancel all active animation frames on unmount
       Object.values(markersRef.current).forEach(marker => {
         if (marker.animationFrameId) {
@@ -141,24 +176,31 @@ const MapView = forwardRef(function MapView({
     // Remove existing tile layer
     map.removeLayer(tileLayerRef.current);
 
+    // maxNativeZoom = the provider's real tile resolution; maxZoom kept higher
+    // so Leaflet overzooms (upscales) past it instead of rendering a blank
+    // "no data" tile once you zoom in further than the source actually covers.
     if (mapStyle === 'flightradar') {
       const base = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}', {
-        maxZoom: 13,
+        maxNativeZoom: 13,
+        maxZoom: 20,
         attribution: 'Esri, GEBCO, NOAA'
       });
       const labels = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Reference/MapServer/tile/{z}/{y}/{x}', {
-        maxZoom: 13
+        maxNativeZoom: 13,
+        maxZoom: 20
       });
       const group = L.layerGroup([base, labels]).addTo(map);
       tileLayerRef.current = group;
     } else {
       let newUrl = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
-      let options = { maxZoom: 20 };
+      let options = { maxNativeZoom: 19, maxZoom: 20 };
 
       if (mapStyle === 'satellite') {
         newUrl = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+        options = { maxNativeZoom: 19, maxZoom: 20 };
       } else if (mapStyle === 'topographic') {
         newUrl = 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png';
+        options = { maxNativeZoom: 17, maxZoom: 20 };
       } else if (mapStyle === 'aeronautical' || mapStyle === 'weather') {
         newUrl = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
       }
@@ -496,18 +538,29 @@ const MapView = forwardRef(function MapView({
         const endLat = f.lat;
         const endLng = f.lng;
         const startTime = Date.now();
-        const duration = f.id.startsWith('LIVE-') ? 30000 : 3000;
+        // Live data refreshes every ~30s. Animating for the full interval means
+        // on-screen planes repaint every frame nonstop. Instead glide briefly to
+        // the new position (~2.5s) then sit static until the next update.
+        const duration = f.id.startsWith('LIVE-') ? 2500 : 3000;
+
+        // Throttle position updates to ~20fps. Each setLatLng forces a
+        // projection + DOM z-index rewrite; at 60fps across many markers this
+        // pins the main thread. 20fps is visually smooth but ~3x cheaper.
+        const FRAME_MS = 50;
+        let lastUpdate = 0;
 
         const animateMarker = () => {
-          const elapsed = Date.now() - startTime;
-          const progress = Math.min(1, elapsed / duration);
-          
-          // Interpolate coordinates
-          const currentLat = startLat + (endLat - startLat) * progress;
-          const currentLng = startLng + (endLng - startLng) * progress;
-          
-          marker.setLatLng([currentLat, currentLng]);
-          
+          const now = Date.now();
+          const progress = Math.min(1, (now - startTime) / duration);
+
+          if (now - lastUpdate >= FRAME_MS || progress >= 1) {
+            lastUpdate = now;
+            marker.setLatLng([
+              startLat + (endLat - startLat) * progress,
+              startLng + (endLng - startLng) * progress,
+            ]);
+          }
+
           if (progress < 1) {
             marker.animationFrameId = requestAnimationFrame(animateMarker);
           } else {
@@ -515,10 +568,15 @@ const MapView = forwardRef(function MapView({
           }
         };
 
-        // If the distance is extremely large (e.g. initial render or teleport), jump immediately
+        // Only smoothly animate planes that are actually on-screen. Off-screen
+        // markers (the majority of a live feed) and large teleports jump
+        // straight to their position — no per-frame projection cost.
         const dist = Math.abs(endLat - startLat) + Math.abs(endLng - startLng);
-        if (dist > 5.0) {
+        const bounds = map.getBounds().pad(0.25);
+        const onScreen = bounds.contains([endLat, endLng]) || bounds.contains([startLat, startLng]);
+        if (dist > 5.0 || !onScreen) {
           marker.setLatLng([endLat, endLng]);
+          marker.animationFrameId = null;
         } else {
           marker.animationFrameId = requestAnimationFrame(animateMarker);
         }
