@@ -614,32 +614,55 @@ export async function fetchLiveOpenSkyFlights(hubCode = 'LHR', bbox = null) {
     estimated: '1',
   });
 
-  // On Android WebView (file:// protocol), the proxy intercepts at the path level
-  // On web dev (http://localhost), use relative path
-  // On Vercel prod (https://), use relative path
+  // On Android WebView (file:// protocol), fetch() API doesn't work for intercepted
+  // requests. Use XMLHttpRequest instead, which the WebViewClient can intercept.
   const apiBase = '';
   const url = `/api/opensky?${params.toString()}`;
 
   // FlightRadar24 responds quickly — use a standard 10s timeout
-  const controller = new AbortController();
-  const timeoutId  = setTimeout(() => controller.abort(), 10000);
+  const timeoutMs = 10000;
 
   try {
-    const res = await fetch(url, {
-      headers: { 'Accept': 'application/json' },
-      signal: controller.signal,
+    const data = await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      const timeoutId = setTimeout(() => {
+        xhr.abort();
+        reject(new Error('Request timeout'));
+      }, timeoutMs);
+
+      xhr.open('GET', url);
+      xhr.setRequestHeader('Accept', 'application/json');
+      
+      xhr.onload = () => {
+        clearTimeout(timeoutId);
+        if (xhr.status === 429) {
+          console.warn('FlightRadar24 rate limit hit — will retry next cycle');
+          resolve([]);
+        } else if (xhr.status === 200 || xhr.status === 0) {
+          try {
+            const data = JSON.parse(xhr.responseText);
+            resolve(data);
+          } catch (e) {
+            reject(new Error('Failed to parse response'));
+          }
+        } else {
+          reject(new Error(`FlightRadar24 API error: ${xhr.status} ${xhr.statusText}`));
+        }
+      };
+
+      xhr.onerror = () => {
+        clearTimeout(timeoutId);
+        reject(new Error('Network error'));
+      };
+
+      xhr.onabort = () => {
+        clearTimeout(timeoutId);
+        reject(new Error('Request aborted'));
+      };
+
+      xhr.send();
     });
-    clearTimeout(timeoutId);
 
-    if (res.status === 429) {
-      console.warn('FlightRadar24 rate limit hit — will retry next cycle');
-      return [];
-    }
-    if (!res.ok) {
-      throw new Error(`FlightRadar24 API error: ${res.status} ${res.statusText}`);
-    }
-
-    const data = await res.json();
     if (!data) return [];
 
     console.log(`[SkyWatch] FlightRadar24 live data received`);
@@ -756,12 +779,30 @@ export async function fetchAircraftPhoto(icao24) {
 
   try {
     const apiBase = '';
-    const res = await fetch(`${apiBase}/api/aircraft-photo?hex=${encodeURIComponent(hex)}`);
-    if (!res.ok) {
-      aircraftPhotoCache.set(hex, null);
-      return null;
-    }
-    const data = await res.json();
+    const url = `/api/aircraft-photo?hex=${encodeURIComponent(hex)}`;
+    
+    // Use XMLHttpRequest for Android WebView compatibility
+    const data = await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('GET', url);
+      xhr.setRequestHeader('Accept', 'application/json');
+      
+      xhr.onload = () => {
+        if (xhr.status === 200 || xhr.status === 0) {
+          try {
+            resolve(JSON.parse(xhr.responseText));
+          } catch (e) {
+            reject(e);
+          }
+        } else {
+          reject(new Error(`HTTP ${xhr.status}`));
+        }
+      };
+      
+      xhr.onerror = () => reject(new Error('Network error'));
+      xhr.send();
+    });
+
     const photo = data?.photos?.[0];
     const result = photo
       ? {

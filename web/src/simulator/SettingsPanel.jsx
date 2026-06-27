@@ -35,7 +35,7 @@ export default function SettingsPanel({
       </div>
 
       {/* Settings list */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '20px', minHeight: 0 }}>
+      <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '16px', display: 'flex', flexDirection: 'column', gap: '20px', minHeight: 0, WebkitOverflowScrolling: 'touch' }}>
         
         {/* User Card */}
         <div className="glass-card" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>

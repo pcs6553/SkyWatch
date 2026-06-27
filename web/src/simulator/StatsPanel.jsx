@@ -45,7 +45,7 @@ export default function StatsPanel({ flights, onSelectFlight, onToggleHeatmap, h
       </div>
 
       {/* Stats Body */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '20px', minHeight: 0 }}>
+      <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '16px', display: 'flex', flexDirection: 'column', gap: '20px', minHeight: 0, WebkitOverflowScrolling: 'touch' }}>
         
         {/* Live Counters */}
         <div>

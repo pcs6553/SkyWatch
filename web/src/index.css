@@ -501,6 +501,11 @@ body {
 }
 
 /* Flight Path Animation */
+.planned-route-line {
+  pointer-events: none;
+  z-index: 399 !important;
+}
+
 .flight-path-line {
   pointer-events: none;
   z-index: 400 !important;

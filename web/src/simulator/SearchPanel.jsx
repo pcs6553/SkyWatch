@@ -15,6 +15,12 @@ export default function SearchPanel({ flights, onSelectFlight, onSelectAirport, 
   const [minSpeed, setMinSpeed] = useState(0);
   const [maxSpeed, setMaxSpeed] = useState(600);
   
+  // Route search state
+  const [showRouteSearch, setShowRouteSearch] = useState(false);
+  const [selectedOrigin, setSelectedOrigin] = useState('');
+  const [selectedDest, setSelectedDest] = useState('');
+  const [routeResults, setRouteResults] = useState([]);
+  
   // Search Execution
   useEffect(() => {
     if (!query.trim() && !showFilters) {
@@ -76,6 +82,24 @@ export default function SearchPanel({ flights, onSelectFlight, onSelectAirport, 
 
     setResults(combined);
   }, [query, flights, selectedCategories, minAlt, maxAlt, minSpeed, maxSpeed, activeTab, showFilters]);
+
+  // Route search handler
+  const handleRouteSearch = () => {
+    if (!selectedOrigin && !selectedDest) return;
+    
+    const routeFlights = flights.filter(f => {
+      const matchOrigin = selectedOrigin ? f.origin === selectedOrigin : true;
+      const matchDest = selectedDest ? f.dest === selectedDest : true;
+      return matchOrigin && matchDest;
+    });
+    
+    setRouteResults(routeFlights);
+  };
+
+  // Get sorted airports list for dropdowns
+  const sortedAirports = Object.values(AIRPORTS).sort((a, b) => 
+    a.iata.localeCompare(b.iata)
+  );
 
   // Handle clicking a search result
   const handleSelectResult = (result) => {
@@ -246,6 +270,167 @@ export default function SearchPanel({ flights, onSelectFlight, onSelectAirport, 
           </div>
         </div>
       )}
+
+      {/* Route Search Section */}
+      <div style={{ background: 'rgba(8, 14, 28, 0.95)', borderBottom: '1px solid var(--border-cyan)', padding: '16px' }}>
+        <button
+          onClick={() => setShowRouteSearch(!showRouteSearch)}
+          style={{
+            width: '100%',
+            background: 'rgba(0, 212, 255, 0.08)',
+            border: '1px solid var(--border-cyan)',
+            color: 'var(--cyan)',
+            padding: '12px',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            fontSize: '13px',
+            fontWeight: 600
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <MapPin size={16} />
+            <span>Search Flights by Route</span>
+          </div>
+          <ChevronDown size={16} style={{ transform: showRouteSearch ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+        </button>
+
+        {showRouteSearch && (
+          <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {/* Origin Selector */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <label style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>
+                Origin Airport
+              </label>
+              <select
+                value={selectedOrigin}
+                onChange={(e) => setSelectedOrigin(e.target.value)}
+                style={{
+                  background: 'rgba(8, 14, 28, 0.6)',
+                  border: '1px solid var(--border-cyan)',
+                  borderRadius: '8px',
+                  padding: '10px 12px',
+                  color: '#fff',
+                  fontSize: '13px',
+                  outline: 'none',
+                  cursor: 'pointer',
+                  fontFamily: 'var(--font-sans)'
+                }}
+              >
+                <option value="">Any Airport</option>
+                {sortedAirports.map(airport => (
+                  <option key={airport.iata} value={airport.iata} style={{ background: 'rgba(8, 14, 28, 0.95)' }}>
+                    {airport.iata} - {airport.city}, {airport.country}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Destination Selector */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <label style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>
+                Destination Airport
+              </label>
+              <select
+                value={selectedDest}
+                onChange={(e) => setSelectedDest(e.target.value)}
+                style={{
+                  background: 'rgba(8, 14, 28, 0.6)',
+                  border: '1px solid var(--border-cyan)',
+                  borderRadius: '8px',
+                  padding: '10px 12px',
+                  color: '#fff',
+                  fontSize: '13px',
+                  outline: 'none',
+                  cursor: 'pointer',
+                  fontFamily: 'var(--font-sans)'
+                }}
+              >
+                <option value="">Any Airport</option>
+                {sortedAirports.map(airport => (
+                  <option key={airport.iata} value={airport.iata} style={{ background: 'rgba(8, 14, 28, 0.95)' }}>
+                    {airport.iata} - {airport.city}, {airport.country}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Search Routes Button */}
+            <button
+              onClick={handleRouteSearch}
+              disabled={!selectedOrigin && !selectedDest}
+              style={{
+                background: (!selectedOrigin && !selectedDest) ? 'rgba(255,255,255,0.04)' : 'var(--cyan)',
+                border: 'none',
+                color: (!selectedOrigin && !selectedDest) ? 'var(--text-muted)' : '#000',
+                padding: '12px',
+                borderRadius: '8px',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: (!selectedOrigin && !selectedDest) ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px'
+              }}
+            >
+              <ArrowRight size={16} />
+              Show Routes
+            </button>
+
+            {/* Route Results */}
+            {routeResults.length > 0 && (
+              <div style={{ marginTop: '8px' }}>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', marginBottom: '8px' }}>
+                  Found {routeResults.length} Flight{routeResults.length !== 1 ? 's' : ''}
+                  {selectedOrigin && selectedDest && (
+                    <span> on route <span className="data-font" style={{ color: 'var(--cyan)' }}>{selectedOrigin}</span> → <span className="data-font" style={{ color: 'var(--cyan)' }}>{selectedDest}</span></span>
+                  )}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '300px', overflowY: 'auto' }}>
+                  {routeResults.map((flight, idx) => (
+                    <div
+                      key={idx}
+                      onClick={() => {
+                        onSelectFlight(flight);
+                        onClose();
+                      }}
+                      className="glass-card"
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', padding: '10px' }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{ width: '28px', height: '28px', borderRadius: '6px', background: 'rgba(255,255,255,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          {getCategoryIcon(flight.category)}
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '13px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span className="data-font" style={{ color: 'var(--amber)' }}>{flight.callsign}</span>
+                          </div>
+                          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                            {flight.airline} • {flight.type}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="data-font" style={{ fontSize: '10px', textAlign: 'right', color: 'var(--text-muted)' }}>
+                        <div>{flight.altitude.toLocaleString()} FT</div>
+                        <div>{flight.speed} KTS</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {routeResults.length === 0 && (selectedOrigin || selectedDest) && (
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center', padding: '12px' }}>
+                No flights found on this route
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Tabs */}
       <div style={{ display: 'flex', borderBottom: '1px solid rgba(0, 212, 255, 0.08)', background: 'var(--bg-dark)' }}>

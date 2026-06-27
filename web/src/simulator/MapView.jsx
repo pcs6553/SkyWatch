@@ -638,7 +638,7 @@ const MapView = forwardRef(function MapView({
     });
   }, [flights, selectedFlight, zoom]);
 
-  // Handle panning to selected aircraft
+  // Handle panning to selected aircraft and drawing flight paths
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -646,12 +646,35 @@ const MapView = forwardRef(function MapView({
     if (selectedFlight) {
       map.panTo([selectedFlight.lat, selectedFlight.lng]);
       
-      // Draw flight path (historical trail + current position as a connected path)
+      // Clear existing flight path layers
       if (plannedAirwayRef.current) {
+        if (plannedAirwayRef.current.animatedLayer) {
+          map.removeLayer(plannedAirwayRef.current.animatedLayer);
+        }
+        if (plannedAirwayRef.current.plannedRoute) {
+          map.removeLayer(plannedAirwayRef.current.plannedRoute);
+        }
         map.removeLayer(plannedAirwayRef.current);
       }
 
-      // Build complete flight path from trail data
+      const layers = [];
+
+      // 1. Draw planned route from origin to destination (dashed line)
+      if (selectedFlight.plannedAirway && selectedFlight.plannedAirway.length > 0) {
+        const plannedRoute = L.polyline(
+          selectedFlight.plannedAirway.map(pt => [pt.lat, pt.lng]),
+          {
+            color: '#00d4ff',      // Cyan for planned route
+            weight: 2.5,
+            opacity: 0.4,
+            dashArray: '8,12',     // Dashed line for planned route
+            className: 'planned-route-line'
+          }
+        ).addTo(map);
+        layers.push(plannedRoute);
+      }
+
+      // 2. Draw actual traveled path (historical trail + current position)
       if (selectedFlight.trail && selectedFlight.trail.length > 0) {
         // Combine trail with current position to show the full path traveled
         const flightPath = [
@@ -659,10 +682,11 @@ const MapView = forwardRef(function MapView({
           [selectedFlight.lat, selectedFlight.lng]
         ];
 
-        plannedAirwayRef.current = L.polyline(flightPath, {
+        // Solid line for actual path traveled
+        const traveledPath = L.polyline(flightPath, {
           color: '#ffb347',     // Amber/orange for traveled path
-          weight: 3.0,
-          opacity: 0.7,
+          weight: 3.5,
+          opacity: 0.8,
           dashArray: 'none',    // Solid line for actual path taken
           className: 'flight-path-line'
         }).addTo(map);
@@ -670,19 +694,35 @@ const MapView = forwardRef(function MapView({
         // Add animated dashes overlay to show direction of travel
         const animatedOverlay = L.polyline(flightPath, {
           color: '#ff9e00',
-          weight: 2.0,
+          weight: 2.5,
           opacity: 0.9,
           dashArray: '10,15',
           className: 'flight-path-animated'
         }).addTo(map);
 
-        // Store both lines for cleanup
-        plannedAirwayRef.current.animatedLayer = animatedOverlay;
+        layers.push(traveledPath);
+        layers.push(animatedOverlay);
+        
+        // Store reference to animated layer for cleanup
+        traveledPath.animatedLayer = animatedOverlay;
+        plannedAirwayRef.current = traveledPath;
+      }
+
+      // Store planned route reference for cleanup
+      if (layers.length > 0 && layers[0]) {
+        if (plannedAirwayRef.current) {
+          plannedAirwayRef.current.plannedRoute = layers[0];
+        } else {
+          plannedAirwayRef.current = layers[0];
+        }
       }
     } else {
       if (plannedAirwayRef.current) {
         if (plannedAirwayRef.current.animatedLayer) {
           map.removeLayer(plannedAirwayRef.current.animatedLayer);
+        }
+        if (plannedAirwayRef.current.plannedRoute) {
+          map.removeLayer(plannedAirwayRef.current.plannedRoute);
         }
         map.removeLayer(plannedAirwayRef.current);
         plannedAirwayRef.current = null;

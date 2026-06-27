@@ -34,7 +34,7 @@ export default function BookmarksPanel({ flights, bookmarks, onRemoveBookmark, o
       </div>
 
       {/* Bookmarks List */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '20px', minHeight: 0 }}>
+      <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '16px', display: 'flex', flexDirection: 'column', gap: '20px', minHeight: 0, WebkitOverflowScrolling: 'touch' }}>
         
         {/* Flights Section */}
         <div>
