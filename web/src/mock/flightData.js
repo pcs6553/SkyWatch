@@ -614,8 +614,11 @@ export async function fetchLiveOpenSkyFlights(hubCode = 'LHR', bbox = null) {
     estimated: '1',
   });
 
-  const apiBase = typeof window !== 'undefined' && window.location.protocol === 'file:' ? 'https://localhost' : '';
-  const url = `${apiBase}/api/opensky?${params.toString()}`;
+  // On Android WebView (file:// protocol), the proxy intercepts at the path level
+  // On web dev (http://localhost), use relative path
+  // On Vercel prod (https://), use relative path
+  const apiBase = '';
+  const url = `/api/opensky?${params.toString()}`;
 
   // FlightRadar24 responds quickly — use a standard 10s timeout
   const controller = new AbortController();
@@ -752,7 +755,7 @@ export async function fetchAircraftPhoto(icao24) {
   if (aircraftPhotoCache.has(hex)) return aircraftPhotoCache.get(hex);
 
   try {
-    const apiBase = typeof window !== 'undefined' && window.location.protocol === 'file:' ? 'https://localhost' : '';
+    const apiBase = '';
     const res = await fetch(`${apiBase}/api/aircraft-photo?hex=${encodeURIComponent(hex)}`);
     if (!res.ok) {
       aircraftPhotoCache.set(hex, null);

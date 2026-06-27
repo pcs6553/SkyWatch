@@ -34,10 +34,10 @@ export default function StatsPanel({ flights, onSelectFlight, onToggleHeatmap, h
     .slice(0, 5);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%', overflow: 'hidden', background: 'var(--bg-dark)' }}>
       
       {/* Header */}
-      <div style={{ padding: '16px', borderBottom: '1px solid var(--border-cyan)', background: 'var(--panel-bg)' }}>
+      <div style={{ padding: '16px', borderBottom: '1px solid var(--border-cyan)', background: 'var(--panel-bg)', flexShrink: 0 }}>
         <div style={{ fontSize: '18px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}>
           <BarChart3 size={18} style={{ color: 'var(--cyan)' }} />
           <span>Global Insights</span>
@@ -45,7 +45,7 @@ export default function StatsPanel({ flights, onSelectFlight, onToggleHeatmap, h
       </div>
 
       {/* Stats Body */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '20px', minHeight: 0 }}>
         
         {/* Live Counters */}
         <div>

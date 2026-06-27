@@ -24,10 +24,10 @@ export default function SettingsPanel({
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%', overflow: 'hidden', background: 'var(--bg-dark)' }}>
       
       {/* Header */}
-      <div style={{ padding: '16px', borderBottom: '1px solid var(--border-cyan)', background: 'var(--panel-bg)' }}>
+      <div style={{ padding: '16px', borderBottom: '1px solid var(--border-cyan)', background: 'var(--panel-bg)', flexShrink: 0 }}>
         <div style={{ fontSize: '18px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}>
           <User size={18} style={{ color: 'var(--cyan)' }} />
           <span>Profile & Settings</span>
@@ -35,7 +35,7 @@ export default function SettingsPanel({
       </div>
 
       {/* Settings list */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '20px', minHeight: 0 }}>
         
         {/* User Card */}
         <div className="glass-card" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
