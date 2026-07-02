@@ -264,32 +264,10 @@ export default function App() {
   }, [mapStyle]);
 
   return (
-    <div className="phone-simulator-container">
-      
-      {/* LEFT AREA: Smartphone Simulator Frame */}
-      <div className="phone-view-area">
-        
-        {/* Smartphone Shell Mockup */}
-        <div className="smartphone-mockup">
-          
-          {/* Top Notch speaker and camera */}
-          <div className="phone-notch">
-            <div className="phone-camera" />
-            <div className="phone-speaker" />
-          </div>
+    <div className="app-container">
 
-          {/* Status Bar */}
-          <div className="phone-status-bar">
-            <span className="data-font">11:24</span>
-            <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-              <WifiIcon />
-              <span className="data-font">5G</span>
-              <BatteryIcon />
-            </div>
-          </div>
-
-          {/* Internal Mobile App Screen content */}
-          <div className="phone-screen-content">
+      {/* Main App Screen */}
+      <div className="app-screen">
             
             {/* Real-time Toast banner warning */}
             {toast && (
@@ -605,10 +583,6 @@ export default function App() {
               })}
             </div>
 
-            {/* Bottom Home Indicator overlay */}
-            <div className="phone-home-indicator" />
-          </div>
-        </div>
       </div>
 
       {/* RIGHT AREA: ADS-B Control Terminal Side Panel */}

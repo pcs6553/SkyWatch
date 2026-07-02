@@ -600,27 +600,17 @@ export async function fetchLiveOpenSkyFlights(hubCode = 'LHR', bbox = null) {
 
   const region = bbox || defaultBboxes[hubCode] || defaultBboxes.LHR;
 
-  // Format bounds parameter for FlightRadar24: y2,y1,x1,x2
+  // OpenSky Network API uses lamin/lomin/lamax/lomax query params directly
   const params = new URLSearchParams({
-    bounds: `${region.lamax},${region.lamin},${region.lomin},${region.lomax}`,
-    faa: '1',
-    satellite: '1',
-    mlat: '1',
-    flarm: '1',
-    adsb: '1',
-    gnd: '1',
-    air: '1',
-    vehicles: '0',
-    estimated: '1',
+    lamin: region.lamin,
+    lomin: region.lomin,
+    lamax: region.lamax,
+    lomax: region.lomax,
   });
 
-  // On Android WebView (file:// protocol), fetch() API doesn't work for intercepted
-  // requests. Use XMLHttpRequest instead, which the WebViewClient can intercept.
-  const apiBase = '';
   const url = `/api/opensky?${params.toString()}`;
 
-  // FlightRadar24 responds quickly — use a standard 10s timeout
-  const timeoutMs = 10000;
+  const timeoutMs = 15000;
 
   try {
     const data = await new Promise((resolve, reject) => {
@@ -636,7 +626,7 @@ export async function fetchLiveOpenSkyFlights(hubCode = 'LHR', bbox = null) {
       xhr.onload = () => {
         clearTimeout(timeoutId);
         if (xhr.status === 429) {
-          console.warn('FlightRadar24 rate limit hit — will retry next cycle');
+          console.warn('[SkyWatch] OpenSky rate limit hit — will retry next cycle');
           resolve([]);
         } else if (xhr.status === 200 || xhr.status === 0) {
           try {
@@ -646,7 +636,7 @@ export async function fetchLiveOpenSkyFlights(hubCode = 'LHR', bbox = null) {
             reject(new Error('Failed to parse response'));
           }
         } else {
-          reject(new Error(`FlightRadar24 API error: ${xhr.status} ${xhr.statusText}`));
+          reject(new Error(`OpenSky API error: ${xhr.status} ${xhr.statusText}`));
         }
       };
 
@@ -663,16 +653,21 @@ export async function fetchLiveOpenSkyFlights(hubCode = 'LHR', bbox = null) {
       xhr.send();
     });
 
-    if (!data) return [];
+    if (!data || !data.states) return [];
 
-    console.log(`[SkyWatch] FlightRadar24 live data received`);
+    console.log(`[SkyWatch] OpenSky live data received: ${data.states.length} states`);
 
-    const flightsList = Object.entries(data)
-      .filter(([key, val]) => Array.isArray(val))
-      .map(([key, val], index) => {
+    // OpenSky states array field order:
+    // [icao24, callsign, origin_country, time_position, last_contact,
+    //  longitude, latitude, baro_altitude, on_ground, velocity,
+    //  true_track, vertical_rate, sensors, geo_altitude, squawk, spi, position_source]
+    const flightsList = data.states
+      .filter(val => val[6] != null && val[5] != null && !val[8]) // must have lat/lng, exclude on-ground
+      .map((val, index) => {
         const [
-          icao24, lat, lng, track, alt, speed, squawk, radar, 
-          type, reg, time, origin, dest, flight, gnd, vspeed, callsign, special, operator
+          icao24, callsign, origin_country, time_pos, last_contact,
+          lng, lat, baro_alt, on_ground, speed,
+          track, vspeed, sensors, geo_alt, squawk
         ] = val;
 
         // Stable deterministic "seed" from ICAO24 for consistent derived fields
@@ -681,17 +676,18 @@ export async function fetchLiveOpenSkyFlights(hubCode = 'LHR', bbox = null) {
         for (let i = 0; i < icaoStr.length; i++) seed += icaoStr.charCodeAt(i);
         seed = seed || index + 1;
 
-        const prefix = (callsign || flight || '').substring(0, 3).toUpperCase();
-        const airline = AIRLINE_NAMES[prefix] || `${operator || 'Private'} Operator`;
-        const typeName = type || AIRCRAFT_TYPES[seed % AIRCRAFT_TYPES.length];
+        const cs = (callsign || '').trim();
+        const prefix = cs.substring(0, 3).toUpperCase();
+        const airline = AIRLINE_NAMES[prefix] || (origin_country ? `${origin_country} Operator` : 'Private');
+        const typeName = AIRCRAFT_TYPES[seed % AIRCRAFT_TYPES.length];
         const engine = ENGINE_TYPES[seed % ENGINE_TYPES.length];
         const seatConfig = SEAT_CONFIGS[seed % SEAT_CONFIGS.length];
         const livery = LIVERIES[seed % LIVERIES.length];
 
-        const altFt = alt || 0;
-        const speedKt = speed || 0;
+        const altFt = Math.round((baro_alt || geo_alt || 0) * 3.28084); // metres → feet
+        const speedKt = Math.round((speed || 0) * 1.944);               // m/s → knots
 
-        const category = classifyFlightCategory({ typeCode: type, prefix, flightNumber: flight });
+        const category = classifyFlightCategory({ typeCode: null, prefix, flightNumber: cs });
 
         // Trailpoints (estimated back-track from current position & heading)
         const trail = [];
@@ -708,20 +704,20 @@ export async function fetchLiveOpenSkyFlights(hubCode = 'LHR', bbox = null) {
         const squawkState = SQUAWK_ALERTS[squawk] || 'Normal';
 
         return {
-          id: `LIVE-${icao24 || key}`,
+          id: `LIVE-${icao24 || index}`,
           icao24: icao24 || '',
-          callsign: callsign || flight || `LGT${(seed % 900) + 100}`,
+          callsign: cs || `SKY${(seed % 900) + 100}`,
           airline,
           type: typeName,
           category,
-          registration: reg || `N-FR${seed % 10000}`,
+          registration: `${icao24 || 'N/A'}`,
           age: `${(seed % 10) + 2} years`,
           msn: `${seed * 17 + 100}`,
           seatConfig,
           engine,
           livery,
-          origin: origin || 'LHR',
-          dest: dest || 'JFK',
+          origin: origin_country || '?',
+          dest: '?',
           lat,
           lng,
           altitude: altFt,
@@ -738,10 +734,7 @@ export async function fetchLiveOpenSkyFlights(hubCode = 'LHR', bbox = null) {
           temp: -55 + (seed % 20),
           progress: 0.5,
           trail,
-          plannedAirway: [
-            AIRPORTS[origin || 'LHR'] || { lat, lng },
-            AIRPORTS[dest || 'JFK'] || { lat, lng }
-          ],
+          plannedAirway: [{ lat, lng }, { lat, lng }],
           bookmarksCount: seed % 8,
           isLive: true
         };
@@ -751,7 +744,6 @@ export async function fetchLiveOpenSkyFlights(hubCode = 'LHR', bbox = null) {
     return flightsList;
 
   } catch (err) {
-    clearTimeout(timeoutId);
     if (err.name === 'AbortError') {
       console.warn('[SkyWatch] Live flights request timed out');
     } else {

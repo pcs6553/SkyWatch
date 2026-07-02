@@ -12,23 +12,19 @@ export default defineConfig({
   plugins: [react()],
 
   server: {
+    host: true, // bind to 0.0.0.0 so mobile devices on the same network can reach it
     proxy: {
       // GET /api/opensky?lamin=...  →  https://opensky-network.org/api/states/all?lamin=...
       // Matches the same path used by the Vercel serverless function (api/opensky.js)
       // so the same URL works in both dev and production.
       '/api/opensky': {
-        target: 'https://data-cloud.flightradar24.com',
+        target: 'https://opensky-network.org',
         changeOrigin: true,
         secure: true,
-        headers: {
-          'Referer': 'https://www.flightradar24.com/',
-          'Origin': 'https://www.flightradar24.com'
-        },
         rewrite: (path) => {
-          // Keep the query string and route to feed.js
           const queryStart = path.indexOf('?');
           const query = queryStart >= 0 ? path.slice(queryStart) : '';
-          return '/zones/fcgi/feed.js' + query;
+          return '/api/states/all' + query;
         },
       },
       // GET /api/aircraft-photo?hex=ICAO24  →  Planespotters' public photo API.
